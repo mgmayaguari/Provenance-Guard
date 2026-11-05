@@ -53,19 +53,40 @@
 
 ### Signal one — the model signal
 
-**What it measures:**
+**What it measures:** How predictable the text is to the language model, using
+perplexity. Lower perplexity means the model finds the word sequence easier to
+predict, and therefore produces a higher AI-likelihood score.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** AI-generated text often
+uses likely, conventional next words, so a language model may find it more
+predictable. Less expected word choices can make human writing harder for the
+model to predict.
 
-**What it can't see:**
+**What it can't see:** Predictability is not authorship. Highly structured,
+highly optimized professional or academic text can use conventional,
+predictable phrasing and look AI-like to this signal. Plain or second-language
+human writing can have the same problem; unusual vocabulary can instead make
+AI writing look human-like. The signal cannot tell who wrote the text or why
+its wording is predictable.
 
 ### Signal two — the style signal
 
-**What it measures:**
+**What it measures:** Burstiness: how much the writing's rhythm varies across
+the document. The main measure is the standard deviation of sentence lengths
+(word counts); clause-complexity variation can provide another measure of
+rhythm. More variation means higher burstiness.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** AI text can settle into
+uniform, mid-length sentences with similar structures. Human writers often
+vary their rhythm, such as following a short sentence with a much longer,
+more complex one. A technical manual can have predictable wording (low
+perplexity) while still having varied sentence lengths (high burstiness).
 
-**What it can't see:**
+**What it can't see:** Burstiness does not establish authorship or understand
+meaning. A human-written formal document may be deliberately uniform, and
+AI-generated text can be edited to vary its rhythm. Shortening sentences,
+adding clauses, or mixing in quotations can also change the measurement
+without changing who wrote the text.
 
 ### The combining rule
 
