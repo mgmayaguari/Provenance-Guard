@@ -42,61 +42,72 @@ Two things worth knowing before you pick numbers:
   a **miss**.
 
 ---
-## 1.
+## 1. False positives stay rare across trials
 
-<!-- Your criterion. It must name a number. -->
+In each of 3 trials, no more than 1 of 10 human-written calibration texts
+(calibration set A, all human-written, distinct from the mixed set in
+criterion 3) is labelled high-confidence AI (combined score at or above
+0.65).
 
-
-
-**Why this target:**
-
-
-
----
-
-## 2.
-
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
-
-
+**Why this target:** A false accusation can seriously harm a real writer, so I
+would rather let some AI-written text through than often label human writing
+as AI. Checking each trial separately prevents a good average from hiding an
+inconsistent detector.
 
 ---
 
-## 3.
+## 2. Clearly AI and human scores separate
 
-<!-- Your criterion. -->
+Using the same set of 5 clearly AI-written and 5 human-written texts, the mean
+AI score is at least 0.25 higher for the AI set in each of 3 trials.
 
-
-
-**Why this target:**
-
-
-
----
-
-## 4.
-
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
-
-
+**Why this target:** The two sets should be separated enough to give the
+labels useful evidence, but I do not expect perfect detection or a gap between
+every individual text. Repeating the comparison accounts for the model
+signal's variation.
 
 ---
 
-## 5.
+## 3. All three labels are reachable
 
-<!-- Your criterion. -->
+Using the same mixed set of 5 clearly-AI and 5 human-written texts from
+criterion 2 (not calibration set A, which is all human-written), at least one
+text receives each label in each of 3 trials: high-confidence human, unsure,
+and high-confidence AI.
 
+**Why this target:** A label that never appears is not useful, and its absence
+could mean the score ranges are unreachable with the actual signals. This set
+must contain real AI-written text, otherwise reaching "high-confidence AI"
+would require the false positive that criterion 1 is designed to make rare.
+Testing real submissions checks the full path, not just the threshold
+definitions.
 
+---
 
-**Why this target:**
+## 4. Valid appeals are recorded and put under review
+
+For 5 out of 5 appeals with an existing `content_id`, the endpoint returns
+success and appends exactly one matching audit event with status
+`under_review`; the original decision remains in the log. An appeal for an
+unknown `content_id` is rejected and creates no appeal event.
+
+**Why this target:** An appeal is the writer's path to challenge a decision.
+It must give clear confirmation and leave an audit trail without erasing the
+original decision; rejecting unknown IDs avoids recording a review that
+cannot be tied to a submission.
+
+---
+
+## 5. Invalid and oversized text gets a clear rejection
+
+Missing, null, empty, whitespace-only, or non-string `text` returns HTTP 400
+with a JSON error and creates no decision. Text longer than 10,000 characters
+returns HTTP 413 and is not scored. None of these cases returns HTTP 500.
+
+**Why this target:** These checks give clients a clear way to correct
+malformed requests and keep oversized submissions from consuming unbounded
+work. The 10,000-character limit is a concrete boundary that can be tested
+reproducibly.
 
 
 
