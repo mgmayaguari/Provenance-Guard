@@ -30,6 +30,7 @@ from flask import Flask, jsonify, request
 
 import audit
 import config
+import detector
 
 app = Flask(__name__)
 
@@ -136,8 +137,6 @@ def ping():
 @app.get("/health")
 def health():
     """Is the service up, and has the model been downloaded yet?"""
-    import detector
-
     loaded = detector._model is not None
     return jsonify({
         "ok": True,
@@ -200,16 +199,48 @@ def submit():
     a malformed input is one of the most common real failures there is.
     """
     payload = request.get_json(silent=True) or {}
+    text = payload.get("text")
+    creator_id = payload.get("creator_id") or "unknown"
 
-    # TODO: delete this and build the route.
+    if not isinstance(text, str) or not text.strip():
+        return jsonify({
+            "error": "invalid_input",
+            "message": "`text` is required and must be non-empty.",
+        }), 400
+
+    content_id = str(uuid.uuid4())
+
+    try:
+        model_score = detector.model_signal(text)
+    except ValueError:
+        return jsonify({
+            "error": "invalid_input",
+            "message": "`text` is too short to score — a few sentences at least.",
+        }), 400
+    except detector.DetectorUnavailable as exc:
+        return jsonify({"error": "detector_unavailable", "message": str(exc)}), 503
+
+    # Placeholders — Milestone 4 combines both signals into a real score,
+    # Milestone 5 turns that score into a real label.
+    guess = "unsure"
+    confidence = model_score
+    label = "PLACEHOLDER — score_to_label isn't built yet."
+
+    audit.log_decision(
+        content_id=content_id,
+        creator_id=creator_id,
+        guess=guess,
+        model_score=model_score,
+        status="decided",
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /submit isn't built yet — see the TODO in app.py.",
-        "you_sent": {
-            "text_length": len(payload.get("text", "")),
-            "creator_id": payload.get("creator_id"),
-        },
-    }), 501
+        "content_id": content_id,
+        "guess": guess,
+        "confidence": confidence,
+        "label": label,
+        "model_score": model_score,
+    })
 
 
 @app.post("/appeal")
