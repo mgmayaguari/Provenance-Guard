@@ -39,7 +39,38 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
+Sites where people post their own writing have a new problem: somebody
+submits a poem, an essay, a comment — was it actually theirs? Nobody can
+answer that with certainty, and detection tools get it wrong in both
+directions. The direction that matters most is falsely accusing a real
+writer of cheating. So the interesting engineering problem isn't building a
+detector that's always right — none exist. It's deciding what the system
+does when it isn't sure, and making sure a wrongly-accused writer has a way
+to push back.
 
+Provenance Guard is a small backend service a writing site could plug into
+to handle that. Here's the path one submission takes through it:
+
+1. A writer sends their text in, along with who they are.
+2. Obviously broken input — missing, empty, or too short to say anything
+   about — gets rejected right away instead of crashing the service.
+3. One check asks "does this *read* like something a language model would
+   have written" — text that's very predictable, word by word, scores more
+   AI-like.
+4. A second, independent check looks only at the *shape* of the writing —
+   how much sentence length varies, how varied the vocabulary is, how it's
+   punctuated — without caring what it actually says.
+5. The two checks get averaged into a single confidence score. When they
+   disagree with each other, that's treated as real uncertainty, not
+   resolved in either direction — so disagreement pulls the result toward
+   "unsure" rather than toward an accusation.
+6. That score becomes a guess — human, AI, or unsure — along with a
+   plain-English sentence a reader would actually understand, not a
+   confidence number.
+7. Every decision is written down, and the writer gets back a guess, how
+   confident it is, and an id for their submission. If they think it's
+   wrong, they can appeal — which doesn't erase the original decision, it
+   just flags it for someone to look at again.
 
 ---
 
@@ -271,9 +302,28 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I ran `stylometry.py` and `detector.py` on three
+  calibration texts (clearly AI, clearly human, a lightly-edited-AI split
+  case) to write down a case where the two signals disagree for Milestone 4.
+  On the human one, though, I noticed the style signal came back AI-leaning
+  on a short, casual, one-sentence comment, which looked wrong, so I pasted
+  the raw terminal output and asked what was going on.
+- *What came back:* An explanation that `sentence_length_spread` returns
+  `0.0` in two completely different situations — a text that's genuinely
+  uniform in sentence length (real evidence of AI-like rhythm), and a text
+  with only one sentence, where there's no spread to measure at all. My
+  `style_signal` was flipping both cases into "maximally AI" the same way,
+  so any short, single-sentence submission — which plenty of real people
+  write — got pushed toward an AI-ish score for a reason that had nothing to
+  do with how it was written.
+- *What I changed:* I had it patch `style_signal` so that when a text has
+  fewer than two sentences, the spread measure contributes a neutral 0.5
+  ("I can't tell") instead of being flipped to 1.0 ("definitely AI"). I
+  re-ran all four calibration texts afterward to confirm the three
+  multi-sentence cases were unaffected and the one-sentence case stopped
+  being wrongly flagged — this is the kind of blind spot the brief warns
+  you'll only find by actually testing edge cases, not by reading the stub
+  docstrings.
 
 **Moment 2**
 
