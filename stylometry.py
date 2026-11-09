@@ -64,8 +64,17 @@ def sentence_length_spread(text: str) -> float:
     `stdev` raises on fewer than two values. Decide what that should return
     before the attack set decides for you.
     """
-    # TODO: replace this
-    return 0.0
+    lengths = [len(words(s)) for s in sentences(text)]
+    lengths = [n for n in lengths if n > 0]
+
+    if len(lengths) < 2:
+        return 0.0
+
+    mean_length = statistics.mean(lengths)
+    if mean_length == 0:
+        return 0.0
+
+    return statistics.stdev(lengths) / mean_length
 
 
 def type_token_ratio(text: str) -> float:
@@ -80,8 +89,11 @@ def type_token_ratio(text: str) -> float:
     directly comparable on it, and if your test inputs vary a lot in length,
     that alone can look like a signal.
     """
-    # TODO: replace this
-    return 0.0
+    all_words = words(text)
+    if not all_words:
+        return 0.0
+
+    return len(set(all_words)) / len(all_words)
 
 
 def punctuation_density(text: str) -> float:
@@ -94,8 +106,12 @@ def punctuation_density(text: str) -> float:
         more interesting than full stops, because they vary more between
         writers.
     """
-    # TODO: replace this
-    return 0.0
+    all_words = words(text)
+    if not all_words:
+        return 0.0
+
+    interesting = len(re.findall(r"[;:—–()\"]", text))
+    return interesting / len(all_words)
 
 
 # ── Combining them ───────────────────────────────────────────────────────────
@@ -122,8 +138,38 @@ def style_signal(text: str) -> float:
     you trust it. Plain and ordinary, not formal: formal prose reads as *human*
     to signal one, and it is plain writing that gets accused.
     """
-    # TODO: replace this
-    return 0.5
+    # All three raw measures point toward "more human" when higher — low
+    # sentence-length spread, low vocabulary variety, and sparse "interesting"
+    # punctuation all read as more machine-like. So each gets scaled to 0-1
+    # and then flipped (1 - x) before averaging.
+    #
+    # The caps below turn unbounded raw numbers into 0-1 scales. They're
+    # calibration decisions, not universal constants — chosen so that
+    # ordinary human prose lands comfortably under the cap while very
+    # uniform, very repetitive, or very unpunctuated text saturates at 1.0.
+    spread_cap = 1.0          # coefficient of variation of sentence length
+    punctuation_cap = 0.15    # "interesting" punctuation marks per word
+
+    # sentence_length_spread returns 0.0 both when a text is perfectly
+    # uniform (real evidence of AI-like rhythm) AND when there's only one
+    # sentence to measure (no evidence either way). Those aren't the same
+    # thing, so a single-sentence submission gets a neutral 0.5 here instead
+    # of being flipped into "maximally AI" — otherwise any short, punchy,
+    # perfectly ordinary one-liner reads as AI-like on this measure alone.
+    if len(sentences(text)) < 2:
+        ai_from_spread = 0.5
+    else:
+        spread = min(sentence_length_spread(text) / spread_cap, 1.0)
+        ai_from_spread = 1.0 - spread
+
+    ttr = min(max(type_token_ratio(text), 0.0), 1.0)
+    punctuation = min(punctuation_density(text) / punctuation_cap, 1.0)
+
+    ai_from_ttr = 1.0 - ttr
+    ai_from_punctuation = 1.0 - punctuation
+
+    score = (ai_from_spread + ai_from_ttr + ai_from_punctuation) / 3.0
+    return round(min(max(score, 0.0), 1.0), 4)
 
 
 if __name__ == "__main__":
@@ -139,4 +185,3 @@ if __name__ == "__main__":
     print(f"type_token_ratio         {type_token_ratio(text)}")
     print(f"punctuation_density      {punctuation_density(text)}")
     print(f"style_signal             {style_signal(text)}   (higher = more likely AI)")
-    print("\nAll zeros? These are stubs — Milestone 4 is where you build them.")

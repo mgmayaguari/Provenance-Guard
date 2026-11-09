@@ -93,9 +93,19 @@ without changing who wrote the text.
 <!-- Write the rule in words, then give the numbers. What happens when the two
      signals disagree? -->
 
-**The rule:**
+**The rule:** A plain weighted average of the two 0–1 signals, each weighted
+equally. Neither signal is treated as more trustworthy than the other, so
+when they disagree the combined score moves toward the middle — toward
+"unsure" — rather than toward a confident accusation in either direction. I'd
+rather the service under-claim ("we can't tell") than over-claim on a
+disagreement it can't actually resolve.
 
-**The numbers:**
+**The numbers:** `WEIGHT_MODEL_SIGNAL = 0.5`, `WEIGHT_STYLE_SIGNAL = 0.5`
+(both in `config.py`).
+
+```
+combined_score = 0.5 * model_score + 0.5 * style_score
+```
 
 **Where it lives:** `scoring.py::combine_signals`
 
@@ -104,6 +114,32 @@ without changing who wrote the text.
 
 **A case where my two signals split, and what my rule does with it:**
 
+```
+"Yes. The system works well overall, and it handles most cases correctly,
+efficiently, and without much trouble at all, which is honestly the whole
+point of building it this way in the first place. It is easy to use. Users
+find it intuitive; new users especially appreciate the simple design, the
+clear instructions, and the helpful error messages. Good — really good."
+```
+
+This is plain, predictable, AI-style phrasing — the kind of thing a model
+finds easy to guess — that I then chopped into short-long-short sentences and
+sprinkled with a semicolon and a dash, the way someone would lightly edit AI
+output to fake burstiness.
+
+- `model_score` = **0.6723** (above the 0.65 AI threshold — reads as AI on
+  content/predictability)
+- `style_score` = **0.3315** (below the 0.35 human threshold — reads as human
+  on rhythm/shape, because the sentence-length editing worked)
+- `combined_score` = **0.5019** → **unsure**
+
+That's exactly what the averaging rule is for: the two signals are measuring
+different things (what the text says vs. how it's shaped), and a cheap,
+targeted edit can fool one without fooling the other. Averaging them refuses
+to pick a side when they actively disagree, which is the honest answer here —
+the text is AI-authored content that's been stylistically disguised, and
+"unsure" is a more defensible claim than a confident wrong one in either
+direction.
 
 
 ---
