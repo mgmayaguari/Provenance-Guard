@@ -153,14 +153,23 @@ direction.
 
 | Label | Score range | The exact text a reader sees |
 |---|---|---|
-| high-confidence human |  |  |
-| unsure |  |  |
-| high-confidence AI |  |  |
+| high-confidence human | 0.00 – 0.35 | "We think this was most likely written by a person." |
+| unsure | 0.35 – 0.65 | "We can't confidently tell whether this was written by a person or by an AI. This isn't an accusation — it just means our signals didn't agree clearly either way." |
+| high-confidence AI | 0.65 – 1.00 | "We think this was most likely written by an AI system, not a person." |
 
 **Why I worded the "unsure" one this way:**
 <!-- It's the hardest of the three. It has to admit uncertainty without
      sounding like an accusation, because the person reading it may well have
      written every word themselves. -->
+
+I wrote it to describe the *tool's* limitation, not the writer. It says "we
+can't tell" rather than anything about the text itself, and it explicitly
+rules out being an accusation in the same sentence a reader would see it. I
+avoided words like "suspicious" or "flagged" — this is the score range a
+plainly-written, perfectly honest human submission can land in just as easily
+as a disguised AI one, so the label can't imply guilt. It also doesn't repeat
+the word "person" and "AI" as a binary choice the reader has to resolve
+themselves; it frames the disagreement as the system's problem, not theirs.
 
 
 
@@ -181,11 +190,18 @@ direction.
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+  -d '{"text": "Honestly, this is text that was written by a human hehe - well lets see if my programs thinkns the same or it marked me as IA", "creator_id": "guess"}'
 ```
 
 ```json
-
+{
+  "confidence": 0.2798,
+  "content_id": "56c558d5-62cd-421c-a8fd-7a5843f5b85a",
+  "guess": "human",
+  "label": "We think this was most likely written by a person.",
+  "model_score": 0.0597,
+  "style_score": 0.5
+}
 ```
 
 **An appeal**
@@ -193,11 +209,15 @@ $ curl -X POST http://127.0.0.1:5000/submit \
 ```bash
 $ curl -X POST http://127.0.0.1:5000/appeal \
   -H "Content-Type: application/json" \
-  -d '{"content_id": "...", "reasoning": "..."}'
+  -d '{"content_id": "56c558d5-62cd-421c-a8fd-7a5843f5b85a", "reasoning": "The fact it says it was written by human makes it suspicius and its exagerated"}'
 ```
 
 ```json
-
+{
+  "content_id": "56c558d5-62cd-421c-a8fd-7a5843f5b85a",
+  "message": "Your appeal has been recorded and is under review.",
+  "status": "under_review"
+}
 ```
 
 **What the log shows afterwards**
@@ -207,6 +227,41 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 ```
 
 ```json
+{
+  "count": 3,
+  "entries": [
+     {
+      "combined_score": 0.7491,
+      "content_id": "ad7950e3-968b-4f15-9eee-3965078242dd",
+      "creator_id": "writer42",
+      "guess": "ai",
+      "label": "We think this was most likely written by an AI system, not a person.",
+      "model_score": 0.881,
+      "status": "decided",
+      "style_score": 0.6172,
+      "timestamp": "2026-11-09T16:18:54+00:00"
+    },
+    {
+      "combined_score": 0.2798,
+      "content_id": "56c558d5-62cd-421c-a8fd-7a5843f5b85a",
+      "creator_id": "guess",
+      "guess": "human",
+      "label": "We think this was most likely written by a person.",
+      "model_score": 0.0597,
+      "status": "decided",
+      "style_score": 0.5,
+      "timestamp": "2026-11-09T16:38:42+00:00"
+    },
+    {
+      "content_id": "56c558d5-62cd-421c-a8fd-7a5843f5b85a",
+      "creator_id": "guess",
+      "event": "appeal",
+      "reasoning": "The fact it says it was written by human makes it suspicius and its exagerated",
+      "status": "under_review",
+      "timestamp": "2026-11-09T16:52:27+00:00"
+    }
+  ]
+}
 
 ```
 
