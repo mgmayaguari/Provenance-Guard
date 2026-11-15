@@ -337,24 +337,43 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 10 per minute, 200 per day
 
-**Why those numbers and not others:**
-<!-- Think about two people: a real writer submitting their own work a few
-     times an hour, and a script sending a thousand variations to map your
-     thresholds. Your numbers have to be liveable for the first and hostile to
-     the second. -->
+**Why those numbers and not others:** These thresholds are anchored to human writing and editing speeds rather than arbitrary server capacity. On average, a person types around 40 words per minute (2,400 words/hour mechanically), but actual original composition averages 500 to 1,000 words per hour once thinking and outlining are factored in. Even prolific full-time authors typically max out at 1,000 to 2,500 words per day.
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+- **10 requests per minute:** A human cannot write 10 new drafts in 60 seconds, so a limit of 1 or 2 would seem sufficient on paper. However, real writers often edit iteratively—spotting a typo right after submitting, fixing a sentence, and resubmitting within seconds. A burst limit of 10 accommodates rapid human tweaks and accidental double-clicks without friction, while immediately halting automated scripts firing dozens of variations per second.
+- **200 requests per day:** If a dedicated writer worked an 8-hour shift and submitted a revision every 5 minutes without a break, they would make 96 requests. Setting the ceiling at 200 gives even the heaviest human power user more than double their realistic daily volume. At the same time, it makes threshold-mapping and brute-force probing impractical, as an attacker cannot send thousands of systematic text perturbations in a single day to reverse-engineer the system's scoring boundaries.
+
+**What a caller counts as:** Why not per IP address? IP-based limiting punishes legitimate shared networks — a university lab or household sharing one public IPv4 address would have one heavy user lock out everyone else. It's also trivially evaded with rotating proxies.
+Why creator_id (and its trade-offs): Tying limits to a self-reported creator_id isolates each caller's quota from their network environment. But since creator_id isn't authenticated here, the failure mode isn't account farming — it's that an attacker can simply invent a new creator_id per request, bypassing the limit entirely with no signup cost. The code falls back to IP-based limiting only when creator_id is missing or malformed, which covers unauthenticated/bad-input cases but doesn't stop a script that varies its creator_id on purpose.
 
 **The run of status codes when I pushed past it:**
 
 <!-- python run_attacks.py --flood 15 -->
 
 ```
+15 submissions as 'flood_tester' against http://127.0.0.1:5000
+The first one is slow while the model loads.
 
+  [ 1/15] 200
+  [ 2/15] 200
+  [ 3/15] 200
+  [ 4/15] 200
+  [ 5/15] 200
+  [ 6/15] 200
+  [ 7/15] 200
+  [ 8/15] 200
+  [ 9/15] 200
+  [10/15] 200
+  [11/15] 429
+  [12/15] 429
+  [13/15] 429
+  [14/15] 429
+  [15/15] 429
+
+============================================================
+200 200 200 200 200 200 200 200 200 200 429 429 429 429 429
+============================================================
 ```
 
 ---
