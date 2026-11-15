@@ -327,9 +327,23 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* After filling in `scenarios.py` and running
+  `run_eval.py`, I pasted the real trial output and asked for the Run Log
+  table filled in honestly — pass or miss, not just reformatted.
+- *What came back:* Two misses I hadn't noticed reading the raw JSON myself.
+  Criterion 2's "AI set scores 0.25 higher than human set" target was nearly
+  flat — a 0.012 gap, not 0.25 — because the human half of my mixed set (a
+  formal report, a cover letter, a config guide) scored almost as AI-like as
+  the AI-written half on both signals. And criterion 5's oversized-text case
+  — 12,500 characters — came back `200` instead of the required `413`,
+  because `app.py::submit` had no length check anywhere in it at all.
+- *What I changed:* I had it add the missing check (`config.MAX_TEXT_LENGTH`
+  plus a guard in `submit()` returning 413) and re-run the full attack set to
+  confirm `MF08` actually flipped from scored to rejected, not just pass a
+  unit test. For the separation problem I didn't let it patch anything —
+  reweighting `combine_signals` can't fix two signals that are measuring the
+  wrong thing for formal writing, so that one stayed a diagnosis in "What's
+  Still Broken" instead of a fix I couldn't actually verify.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
@@ -788,15 +802,47 @@ into this fix.
 
 ## What's Still Broken
 
-<!-- For each attack still getting through and each criterion still missed:
-     what you'd do, and why you stopped. -->
+**`RQ07` — a JSON-array request body still crashes with 500.** `submit()`
+does `request.get_json(silent=True) or {}`, then `payload.get("text")`. A
+JSON array is truthy, so `or {}` never fires, and `.get` on a list raises
+`AttributeError`. This breaks criterion 5's "none of these cases returns
+HTTP 500" independently of the length fix above — I diagnosed it and left it
+unfixed rather than fold it into "The Improvement," because that section is
+supposed to trace to one diagnosis, and this is a different mechanism with
+its own fix (`isinstance(payload, dict)` before any `.get` call). It's a
+one-line change; I ran out of scope for this unit before I ran out of fix.
 
+**Criteria 2 and 3 — formal human writing still scores like AI text.** Both
+signals measure the wrong axis for this: `model_signal` reads predictability,
+and formulaic human prose (a cover letter, a config guide, a five-paragraph
+essay) is just as predictable as AI prose; `style_signal` reads sentence-length
+uniformity and lexical variety, and formal human writing is uniform and
+low-variety by genre, not by authorship. Neither signal has a feature that
+actually tracks *who* wrote something once the content is formulaic. Fixing
+this needs a signal that measures something else entirely, or a model trained
+for exactly this distinction — not a weight change in
+`scoring.combine_signals`, which I confirmed wouldn't help: reweighting two
+signals that already overlap just rescales the overlap, it doesn't separate
+it. I stopped at the diagnosis because I can't validate a new signal's
+behavior with confidence inside this unit.
 
+**`PI02` — the fake-SYSTEM-message injection still works.** `detector.model_signal`
+feeds the raw submitted text straight into the local model with no
+separation between "content to evaluate" and "instructions," so text that
+*looks* like a system message asking for a low AI score measurably pulls the
+model score down (0.2044 in the eval run) and flips the guess to `human`.
+Closing this needs sanitizing or isolating suspicious injection patterns
+before the text reaches the model — a meaningfully different piece of work
+from a threshold or weight change, so I've left it diagnosed, not patched.
 
-**The trade I'd make if this ran for real:**
-
-<!-- Two sentences. Fewer wrong accusations means more AI text getting through.
-     Say which way you'd go and WHO PAYS FOR IT. -->
+**The trade I'd make if this ran for real:** I'd keep the thresholds biased
+toward fewer false accusations even with all three of the above still open —
+widening `HUMAN_THRESHOLD`/`AI_THRESHOLD` further if criterion 1 ever started
+slipping, not narrowing them to catch more AI text. That means real AI-written
+submissions keep getting through as `unsure` or `human` more often than a
+stricter system would allow, and the cost of that lands on the site's
+confidence in its own labels, not on an individual writer wrongly told their
+own work wasn't theirs.
 
 
 
