@@ -47,6 +47,14 @@ DETECTOR_MODEL = os.getenv("AI201_DETECTOR_MODEL", "gpt2")
 DETECTOR_MAX_TOKENS = 400
 
 
+# ─── Input limits ─────────────────────────────────────────────────────────────
+# `/submit` rejects text longer than this with 413, before either signal runs.
+# Without a cap, an enormous submission still gets scored normally — it just
+# costs more to process — which is how criterion 5 was failing.
+
+MAX_TEXT_LENGTH = 10_000
+
+
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
 # How much each signal counts toward the combined score.
 #

@@ -210,6 +210,18 @@ def submit():
             "message": "`text` is required and must be non-empty.",
         }), 400
 
+    if len(text) > config.MAX_TEXT_LENGTH:
+        audit.log_rejection(
+            creator_id=creator_id,
+            reason="too_long",
+            length=len(text),
+            limit=config.MAX_TEXT_LENGTH,
+        )
+        return jsonify({
+            "error": "invalid_input",
+            "message": f"`text` must be at most {config.MAX_TEXT_LENGTH} characters.",
+        }), 413
+
     content_id = str(uuid.uuid4())
 
     try:

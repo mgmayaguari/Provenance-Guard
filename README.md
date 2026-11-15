@@ -685,20 +685,102 @@ never follows through.
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** Added `config.MAX_TEXT_LENGTH = 10_000` and a length
+check in `app.py::submit`, placed right after the existing
+missing/empty/non-string check and before `content_id` is generated or either
+signal runs. Text over 10,000 characters now gets rejected with HTTP 413 and
+a JSON error, with the rejection logged via `audit.log_rejection(reason="too_long", length=..., limit=...)` — the same pattern already used for rate-limit
+rejections, so both kinds of rejection show up the same way in the log.
 
-**Which diagnosis pointed at it:**
+**Which diagnosis pointed at it:** The criterion 5 diagnosis above — the
+route's only input guard was the type/empty check; there was no length check
+anywhere in `submit()`, `detector.model_signal`, or `scoring.combine_signals`
+before scoring happened, so an oversized submission was scored normally
+instead of rejected.
 
 ### Attack Run — After
 
-<!-- Same format. `run_attacks.py --label after` -->
+- Produced by: `run_attacks.py::main` · `--set attack_set --label after`
+- Service: `app.py::submit`
+- 56 attacks · 2026-11-15 17:45
+- Auto-marked BROKE (5xx, crash, no response): **1**
 
+| ID | Family | Targeting | Status | Content ID | Guess | Score | Verdict |
+|---|---|---|---|---|---|---|---|
+| EV01 | evasion | signal two: typos raise word variety | 200 | `7ff05494-71bb-4d22-b2bd-a111c67ff17f` | unsure | 0.410 |  |
+| EV02 | evasion | signal two: broken-up sentences raise length spread | 200 | `7c865a98-6bf1-4ca7-b129-24f5e2d19bdb` | unsure | 0.482 |  |
+| EV03 | evasion | signal two: a pasted quotation changes the shape | 200 | `8a710fc5-a084-4ebe-9390-9def47647790` | unsure | 0.588 |  |
+| EV04 | evasion | signal one: unusual words raise perplexity | 200 | `d6d2ddf5-2368-46e0-8d0f-944697929068` | unsure | 0.631 |  |
+| EV05 | evasion | both signals: heavy human editing pass | 200 | `e0a3c9c1-9177-4b6d-ba1c-0ed8bf5b3899` | unsure | 0.406 |  |
+| EV06 | evasion | signal two: one very long sentence and one very short | 200 | `322dfbaf-3020-4066-b653-40a76647662a` | unsure | 0.495 |  |
+| EV07 | evasion | signal two: padding with punctuation | 200 | `3d80e33d-4ebb-4406-8dc0-2208d8eb2bc0` | unsure | 0.501 |  |
+| EV08 | evasion | signal one: text below the token window | 200 | `cd97751c-2834-4a0c-b0ea-a5fa82c8beb5` | unsure | 0.409 |  |
+| EV09 | evasion | both: AI text with a human opening paragraph bolted on | 200 | `ef5038d9-bc14-445e-a7c2-7756624c09eb` | unsure | 0.633 |  |
+| EV10 | evasion | signal two: repeated stanza structure | 200 | `052ec7e9-e42b-4871-baaa-43c8b46e8c72` | ai | 0.871 |  |
+| FP01 | false_positive | plain, clear human writing with no flourishes | 200 | `3f86671c-1f4f-40c0-8cdd-a533bf1cf0f7` | unsure | 0.614 |  |
+| FP02 | false_positive | human writing in a formal register | 200 | `2dca5219-f6dd-4939-b3ca-f9f390ecef3c` | ai | 0.711 |  |
+| FP03 | false_positive | a non-native English speaker writing carefully | 200 | `97c105ba-22a1-4848-9647-4f369cbf5c94` | ai | 0.727 |  |
+| FP04 | false_positive | a student essay written to a rubric | 200 | `98347a75-8035-4f70-a333-3ad68d3a99ef` | ai | 0.721 |  |
+| FP05 | false_positive | technical documentation written by a person | 200 | `ef1758be-c095-4921-9013-4f6eee5c23fe` | ai | 0.756 |  |
+| FP06 | false_positive | a person imitating a formal template | 200 | `9fb9c2b9-66a6-4f34-a0ad-88749ee9f545` | ai | 0.732 |  |
+| FP07 | false_positive | human writing that repeats a phrase deliberately | 200 | `b8fa55d6-e97c-4742-86e3-6aab23f07f60` | ai | 0.743 |  |
+| FP08 | false_positive | very short genuine human submission | 200 | `9eaaf54f-2b55-4201-9366-0f15230b6bcb` | unsure | 0.422 |  |
+| PI01 | prompt_injection | instruction to ignore the check | 200 | `7a4baf29-fc95-4974-9d12-5f283e7bb605` | unsure | 0.465 |  |
+| PI02 | prompt_injection | instruction disguised as a system message | 200 | `84f3d286-fa32-4ef8-aad8-22e681318c55` | human | 0.310 |  |
+| PI03 | prompt_injection | instruction wrapped in the writer's voice | 200 | `53ceeaa5-8259-4ded-8f51-c805a0f3b558` | unsure | 0.528 |  |
+| PI04 | prompt_injection | attempt to make the label text hostile | 200 | `672f1f8b-80a8-4391-a493-b839b68c2c94` | unsure | 0.496 |  |
+| PI05 | prompt_injection | attempt to inject into the audit log | 200 | `a7c0494d-e7ef-4353-81e4-2c4283b87d83` | unsure | 0.414 |  |
+| PI06 | prompt_injection | instruction plus real human text | 200 | `6c6954d9-bd38-4a7f-a5be-f6e741229e0d` | unsure | 0.587 |  |
+| MF01 | malformed | text is only whitespace | 400 | `—` | — | — |  |
+| MF02 | malformed | text is a single character | 400 | `—` | — | — |  |
+| MF03 | malformed | text is control characters | 200 | `a095db58-64cd-4b56-a989-909a743e498f` | human | 0.250 |  |
+| MF04 | malformed | text is only punctuation | 200 | `6dfc6319-2cdf-446d-8cbc-49695d580527` | unsure | 0.506 |  |
+| MF05 | malformed | text is a very long single word | 200 | `dadf2bf7-f190-4fa8-81a1-34a1ae01a4e2` | ai | 0.749 |  |
+| MF06 | malformed | text is emoji only | 200 | `9bb4fe14-3984-41c9-9a99-bddeca2fab05` | ai | 0.915 |  |
+| MF07 | malformed | text is right-to-left script | 200 | `1732051f-a30a-4111-a4d2-ecbed832f05f` | ai | 0.870 |  |
+| MF08 | malformed | text is 60,000 characters | **413** | `—` | — | — | **HELD** |
+| RQ01 | malformed | no text field at all | 400 | `—` | — | — |  |
+| RQ02 | malformed | no creator_id | 200 | `f396eafa-6095-4ba5-b892-ad3e6b781ac1` | unsure | 0.370 |  |
+| RQ03 | malformed | text is a number | 400 | `—` | — | — |  |
+| RQ04 | malformed | text is a list | 400 | `—` | — | — |  |
+| RQ05 | malformed | text is null | 400 | `—` | — | — |  |
+| RQ06 | malformed | creator_id is an object | 200 | `56e89081-1004-44de-a44e-305dbce74873` | human | 0.275 |  |
+| RQ07 | malformed | body is a JSON array, not an object | 500 | `—` | — | — | BROKE |
+| RQ08 | malformed | body is unparseable JSON | 400 | `—` | — | — |  |
+| RQ09 | malformed | body is empty | 400 | `—` | — | — |  |
+| RQ10 | malformed | body is form-encoded, not JSON | 400 | `—` | — | — |  |
+| RQ11 | malformed | body is JSON claiming to be plain text | 400 | `—` | — | — |  |
+| RQ12 | malformed | deeply nested JSON | 400 | `—` | — | — |  |
+| FL01_01 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c5e73e4c-2038-499e-a1a7-34fc81b816fc` | human | 0.264 |  |
+| FL01_02 | flood_same_creator | 20 rapid submissions from one creator | 200 | `f9ededf1-ea7e-4da9-822c-d3f3bb62a516` | human | 0.264 |  |
+| FL01_03 | flood_same_creator | 20 rapid submissions from one creator | 200 | `e21f5dfa-9bc3-49ff-a747-1f1a0109e888` | human | 0.264 |  |
+| FL01_04 | flood_same_creator | 20 rapid submissions from one creator | 200 | `0fe76df2-772d-43e5-ad6d-090aa32c148d` | human | 0.264 |  |
+| FL01_05 | flood_same_creator | 20 rapid submissions from one creator | 200 | `5e37cb51-63e4-4b86-a5b5-ec7568b10a7e` | human | 0.264 |  |
+| FL01_06 | flood_same_creator | 20 rapid submissions from one creator | 200 | `9393400a-6adc-4ce8-8789-faf452015d43` | human | 0.264 |  |
+| FL01_07 | flood_same_creator | 20 rapid submissions from one creator | 200 | `438c4d3f-9d48-4f20-9409-60092e16ddf9` | human | 0.264 |  |
+| FL01_08 | flood_same_creator | 20 rapid submissions from one creator | 200 | `a44cbd21-953d-4b70-9713-0f26776dfb4c` | human | 0.264 |  |
+| FL01_09 | flood_same_creator | 20 rapid submissions from one creator | 200 | `40f919ee-dfd7-4e77-8a1e-5dfcd6856870` | human | 0.264 |  |
+| FL01_10 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c697eabc-7173-44b5-8a83-ca9e86ba6f2f` | human | 0.264 |  |
+| FL01_11 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — |  |
+| FL01_12 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — |  |
 
+**Did it help, and how do I know:** Yes, for the thing it targeted. `MF08`
+(60,000 characters) went from `200 / ai / 0.921` before the change to a
+clean `413` after it — real evidence from the same attack, before and after,
+not just the unit test. The fix is narrow by design: it only rejects text
+over the length limit, so it can't touch the evasion, false-positive, or
+prompt-injection rows, and none of them moved.
 
-**Did it help, and how do I know:**
-
-<!-- Widening the unsure band usually fixes one problem and creates another.
-     Reporting that trade honestly is worth full credit. -->
+It did **not** fix criterion 5 outright. `RQ07` — a request body that's a
+bare JSON array instead of an object — still returns `500`, both before and
+after this change. That's a different mechanism: `submit()` does
+`payload.get("text")` after `request.get_json(silent=True) or {}`, and a
+JSON array is truthy, so `payload` stays a list and `.get` raises
+`AttributeError`. My fix only addresses length; it does nothing for a
+request whose body isn't a dict at all. Criterion 5 ("None of these cases
+returns HTTP 500") is still missed because of that separate, pre-existing
+bug — carried into "What's Still Broken" below rather than quietly folded
+into this fix.
 
 
 
